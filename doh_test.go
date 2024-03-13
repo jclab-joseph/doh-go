@@ -21,11 +21,13 @@ package doh
 
 import (
 	"context"
+	"github.com/jclab-joseph/doh-go/bootstrapclient"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/likexian/doh-go/dns"
+	"github.com/jclab-joseph/doh-go/dns"
 	"github.com/likexian/gokit/assert"
 )
 
@@ -40,22 +42,22 @@ func TestNew(t *testing.T) {
 	defer cancel()
 
 	c := New(CloudflareProvider)
-	rsp, err := c.Query(ctx, "likexian.com", dns.TypeA)
+	rsp, err := c.Query(ctx, http.DefaultClient, "likexian.com", dns.TypeA)
 	assert.Nil(t, err)
 	assert.Gt(t, len(rsp.Answer), 0)
 
 	c = New(DNSPodProvider)
-	rsp, err = c.Query(ctx, "likexian.com", dns.TypeA)
+	rsp, err = c.Query(ctx, http.DefaultClient, "likexian.com", dns.TypeA)
 	assert.Nil(t, err)
 	assert.Gt(t, len(rsp.Answer), 0)
 
 	c = New(GoogleProvider)
-	rsp, err = c.Query(ctx, "likexian.com", dns.TypeA)
+	rsp, err = c.Query(ctx, http.DefaultClient, "likexian.com", dns.TypeA)
 	assert.Nil(t, err)
 	assert.Gt(t, len(rsp.Answer), 0)
 
 	c = New(Quad9Provider)
-	rsp, err = c.Query(ctx, "likexian.com", dns.TypeA)
+	rsp, err = c.Query(ctx, http.DefaultClient, "likexian.com", dns.TypeA)
 	assert.Nil(t, err)
 	assert.Gt(t, len(rsp.Answer), 0)
 }
@@ -67,13 +69,37 @@ func TestUse(t *testing.T) {
 	c := Use()
 	defer c.Close()
 
-	_, err := c.Query(ctx, "likexian", dns.TypeA)
+	_, err := c.Query(ctx, http.DefaultClient, "likexian", dns.TypeA)
 	assert.NotNil(t, err)
 
 	c = Use(CloudflareProvider, DNSPodProvider, GoogleProvider, Quad9Provider)
 	for i := 0; i < 100; i++ {
 		for _, v := range []dns.Type{dns.TypeA, dns.TypeMX} {
-			rsp, err := c.Query(ctx, "likexian.com", v)
+			rsp, err := c.Query(ctx, http.DefaultClient, "likexian.com", v)
+			assert.Nil(t, err)
+			assert.Gt(t, len(rsp.Answer), 0)
+		}
+	}
+}
+
+func TestUseWithStaticDns(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	c := Use()
+	defer c.Close()
+
+	client := &http.Client{
+		Transport: bootstrapclient.StaticDnsTransport(),
+	}
+
+	_, err := c.Query(ctx, client, "likexian", dns.TypeA)
+	assert.NotNil(t, err)
+
+	c = Use(CloudflareProvider, DNSPodProvider, GoogleProvider, Quad9Provider)
+	for i := 0; i < 100; i++ {
+		for _, v := range []dns.Type{dns.TypeA, dns.TypeMX} {
+			rsp, err := c.Query(ctx, client, "likexian.com", v)
 			assert.Nil(t, err)
 			assert.Gt(t, len(rsp.Answer), 0)
 		}
@@ -88,25 +114,25 @@ func TestEnableCache(t *testing.T) {
 	defer c.Close()
 
 	c.EnableCache(true)
-	rsp, err := c.Query(ctx, "likexian.com", dns.TypeA)
+	rsp, err := c.Query(ctx, http.DefaultClient, "likexian.com", dns.TypeA)
 	assert.Nil(t, err)
 	assert.Gt(t, len(rsp.Answer), 0)
 	ttl := rsp.Answer[0].TTL
 
 	time.Sleep(1 * time.Second)
-	rsp, err = c.Query(ctx, "likexian.com", dns.TypeA)
+	rsp, err = c.Query(ctx, http.DefaultClient, "likexian.com", dns.TypeA)
 	assert.Nil(t, err)
 	assert.Gt(t, len(rsp.Answer), 0)
 	assert.Equal(t, rsp.Answer[0].TTL, ttl)
 
 	c.EnableCache(false)
-	rsp, err = c.Query(ctx, "likexian.com", dns.TypeA)
+	rsp, err = c.Query(ctx, http.DefaultClient, "likexian.com", dns.TypeA)
 	assert.Nil(t, err)
 	assert.Gt(t, len(rsp.Answer), 0)
 	ttl = rsp.Answer[0].TTL
 
 	time.Sleep(1 * time.Second)
-	rsp, err = c.Query(ctx, "likexian.com", dns.TypeA)
+	rsp, err = c.Query(ctx, http.DefaultClient, "likexian.com", dns.TypeA)
 	assert.Nil(t, err)
 	assert.Gt(t, len(rsp.Answer), 0)
 	assert.NotEqual(t, rsp.Answer[0].TTL, ttl)
@@ -123,7 +149,7 @@ func TestConcurrentQuery(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
-			rsp, err := c.Query(ctx, "likexian.com", dns.TypeA)
+			rsp, err := c.Query(ctx, http.DefaultClient, "likexian.com", dns.TypeA)
 			assert.Nil(t, err)
 			assert.Gt(t, len(rsp.Answer), 0)
 			wg.Done()

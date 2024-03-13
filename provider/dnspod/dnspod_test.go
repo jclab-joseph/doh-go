@@ -21,8 +21,9 @@ package dnspod
 
 import (
 	"context"
-	"github.com/likexian/doh-go/dns"
+	"github.com/jclab-joseph/doh-go/dns"
 	"github.com/likexian/gokit/assert"
+	"net/http"
 	"testing"
 	"time"
 )
@@ -43,11 +44,11 @@ func TestQuery(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	rsp, err := c.Query(ctx, "likexian.com", dns.TypeA)
+	rsp, err := c.Query(ctx, http.DefaultClient, "likexian.com", dns.TypeA)
 	assert.Nil(t, err)
 	assert.Gt(t, len(rsp.Answer), 0)
 
-	rsp, err = c.Query(ctx, "www.网络.cn", dns.TypeA)
+	rsp, err = c.Query(ctx, http.DefaultClient, "한국인터넷정보센터.한국", dns.TypeA)
 	assert.Nil(t, err)
 	assert.Gt(t, len(rsp.Answer), 0)
 }
@@ -60,28 +61,28 @@ func TestECSQuery(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err = c.ECSQuery(ctx, "xx", dns.TypeA, "1.1.1.1")
+	_, err = c.ECSQuery(ctx, http.DefaultClient, "xx", dns.TypeA, "1.1.1.1")
 	assert.NotNil(t, err)
 
-	_, err = c.ECSQuery(ctx, "likexian.com", dns.TypeAAAA, "xx")
+	_, err = c.ECSQuery(ctx, http.DefaultClient, "likexian.com", dns.TypeAAAA, "xx")
 	assert.NotNil(t, err)
 
-	_, err = c.ECSQuery(ctx, "likexian.com", dns.TypeA, "xx")
+	_, err = c.ECSQuery(ctx, http.DefaultClient, "likexian.com", dns.TypeA, "xx")
 	assert.NotNil(t, err)
 
-	rsp, err := c.ECSQuery(ctx, "likexian.com", dns.TypeA, "1.1.1.1")
+	rsp, err := c.ECSQuery(ctx, http.DefaultClient, "likexian.com", dns.TypeA, "1.1.1.1")
 	assert.Nil(t, err)
 	assert.Gt(t, len(rsp.Answer), 0)
 
-	rsp, err = c.ECSQuery(ctx, "likexian.com", dns.TypeA, "1.1.1.1/24")
+	rsp, err = c.ECSQuery(ctx, http.DefaultClient, "likexian.com", dns.TypeA, "1.1.1.1/24")
 	assert.Nil(t, err)
 	assert.Gt(t, len(rsp.Answer), 0)
 
 	Upstream[DefaultProvides] = "test"
-	_, err = c.ECSQuery(ctx, "likexian.com", dns.TypeA, "")
+	_, err = c.ECSQuery(ctx, http.DefaultClient, "likexian.com", dns.TypeA, "")
 	assert.NotNil(t, err)
 
 	Upstream[DefaultProvides] = "http://119.29.29.29/dns"
-	_, err = c.ECSQuery(ctx, "likexian.com", dns.TypeA, "")
+	_, err = c.ECSQuery(ctx, http.DefaultClient, "likexian.com", dns.TypeA, "")
 	assert.NotNil(t, err)
 }

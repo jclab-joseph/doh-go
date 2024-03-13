@@ -24,9 +24,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 
-	"github.com/likexian/doh-go/dns"
+	"github.com/jclab-joseph/doh-go/dns"
 	"github.com/likexian/gokit/xhttp"
 	"github.com/likexian/gokit/xip"
 )
@@ -82,12 +83,12 @@ func (c *Provider) SetProvides(p int) error {
 }
 
 // Query do DoH query
-func (c *Provider) Query(ctx context.Context, d dns.Domain, t dns.Type) (*dns.Response, error) {
-	return c.ECSQuery(ctx, d, t, "")
+func (c *Provider) Query(ctx context.Context, httpClient *http.Client, d dns.Domain, t dns.Type) (*dns.Response, error) {
+	return c.ECSQuery(ctx, httpClient, d, t, "")
 }
 
 // ECSQuery do DoH query with the edns0-client-subnet option
-func (c *Provider) ECSQuery(ctx context.Context, d dns.Domain, t dns.Type, s dns.ECS) (*dns.Response, error) {
+func (c *Provider) ECSQuery(ctx context.Context, httpClient *http.Client, d dns.Domain, t dns.Type, s dns.ECS) (*dns.Response, error) {
 	name, err := d.Punycode()
 	if err != nil {
 		return nil, err
@@ -107,7 +108,7 @@ func (c *Provider) ECSQuery(ctx context.Context, d dns.Domain, t dns.Type, s dns
 		param["edns_client_subnet"] = ss
 	}
 
-	rsp, err := xhttp.New().Get(ctx, Upstream[c.provides], param, xhttp.Header{"accept": "application/dns-json"})
+	rsp, err := xhttp.New().Get(ctx, Upstream[c.provides], param, xhttp.Header{"accept": "application/dns-json"}, httpClient)
 	if err != nil {
 		return nil, err
 	}

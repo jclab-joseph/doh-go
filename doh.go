@@ -22,22 +22,23 @@ package doh
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
-	"github.com/likexian/doh-go/dns"
-	"github.com/likexian/doh-go/provider/cloudflare"
-	"github.com/likexian/doh-go/provider/dnspod"
-	"github.com/likexian/doh-go/provider/google"
-	"github.com/likexian/doh-go/provider/quad9"
+	"github.com/jclab-joseph/doh-go/dns"
+	"github.com/jclab-joseph/doh-go/provider/cloudflare"
+	"github.com/jclab-joseph/doh-go/provider/dnspod"
+	"github.com/jclab-joseph/doh-go/provider/google"
+	"github.com/jclab-joseph/doh-go/provider/quad9"
 	"github.com/likexian/gokit/xcache"
 	"github.com/likexian/gokit/xhash"
 )
 
 // Provider is the provider interface
 type Provider interface {
-	Query(context.Context, dns.Domain, dns.Type) (*dns.Response, error)
-	ECSQuery(context.Context, dns.Domain, dns.Type, dns.ECS) (*dns.Response, error)
+	Query(context.Context, *http.Client, dns.Domain, dns.Type) (*dns.Response, error)
+	ECSQuery(context.Context, *http.Client, dns.Domain, dns.Type, dns.ECS) (*dns.Response, error)
 	String() string
 }
 
@@ -154,12 +155,12 @@ func (c *DoH) Close() {
 }
 
 // Query do DoH query
-func (c *DoH) Query(ctx context.Context, d dns.Domain, t dns.Type) (*dns.Response, error) {
-	return c.ECSQuery(ctx, d, t, "")
+func (c *DoH) Query(ctx context.Context, httpClient *http.Client, d dns.Domain, t dns.Type) (*dns.Response, error) {
+	return c.ECSQuery(ctx, httpClient, d, t, "")
 }
 
 // ECSQuery do DoH query with the edns0-client-subnet option
-func (c *DoH) ECSQuery(ctx context.Context, d dns.Domain, t dns.Type, s dns.ECS) (*dns.Response, error) {
+func (c *DoH) ECSQuery(ctx context.Context, httpClient *http.Client, d dns.Domain, t dns.Type, s dns.ECS) (*dns.Response, error) {
 	c.RLock()
 	stats := c.stats
 	c.RUnlock()
@@ -172,17 +173,17 @@ func (c *DoH) ECSQuery(ctx context.Context, d dns.Domain, t dns.Type, s dns.ECS)
 				min = []interface{}{k, r}
 			}
 		}
-		rsp, err := c.fastECSQuery(ctx, []Provider{c.providers[min[0].(int)]}, d, t, s)
+		rsp, err := c.fastECSQuery(ctx, httpClient, []Provider{c.providers[min[0].(int)]}, d, t, s)
 		if err == nil {
 			return rsp, err
 		}
 	}
 
-	return c.fastECSQuery(ctx, c.providers, d, t, s)
+	return c.fastECSQuery(ctx, httpClient, c.providers, d, t, s)
 }
 
 // fastECSQuery do query and returns the fastest result
-func (c *DoH) fastECSQuery(ctx context.Context, ps []Provider, d dns.Domain, t dns.Type, s dns.ECS) (*dns.Response, error) {
+func (c *DoH) fastECSQuery(ctx context.Context, httpClient *http.Client, ps []Provider, d dns.Domain, t dns.Type, s dns.ECS) (*dns.Response, error) {
 	cacheKey := ""
 	if c.cache != nil {
 		cacheKey = xhash.Sha1(string(d), string(t), string(s)).Hex()
@@ -198,7 +199,7 @@ func (c *DoH) fastECSQuery(ctx context.Context, ps []Provider, d dns.Domain, t d
 	r := make(chan interface{})
 	for k, p := range ps {
 		go func(k int, p Provider) {
-			rsp, err := p.ECSQuery(ctxs, d, t, s)
+			rsp, err := p.ECSQuery(ctxs, httpClient, d, t, s)
 			c.Lock()
 			if _, ok := c.stats[k]; !ok {
 				c.stats[k] = []interface{}{0, 0, 100}
